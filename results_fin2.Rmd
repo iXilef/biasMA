@@ -1,0 +1,470 @@
+---
+title: "Original Resampling"
+author: "Felix Boehm"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    smooth_scroll: yes
+    fig_width: 15
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{=html}
+<style type="text/css">
+.main-container {
+  max-width: 1800px !important;
+  margin: auto;
+}
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  error = F,
+	message = FALSE,
+	warning = FALSE,
+	include = T,
+	echo = F,
+	fig.width = 15,
+  fig.height = 7,
+	options(mc_doScale_quiet=TRUE),
+  results = 'asis'
+)
+library(knitr)
+library(gtsummary)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(ggplot2)
+library(topGO)
+library(zoo)
+library(binr)
+library(dplyr)
+setwd("C:/Users/Flix/OneDrive/Master/initial")
+```
+
+```{r}
+load("./data/misc.RData")
+load("./data/annotations.RData")
+load("./data/orig_results.RData")
+load("./data/RMD_orig.RData")
+load("./data/orig_x.RData")
+
+```
+
+```{r}
+orig_fc_o_trans <- orig_fc_o_trans[-which(orig_fc_o_trans$method %in% c("elim", "weight", "lea") & orig_GO_N$fdr == "fdr"),]
+orig_fc_o_trans <- orig_fc_o_trans[-which(orig_fc_o_trans$N == 0),]
+
+orig_GO_N_o_t <- orig_GO_N_o_t[-which(orig_GO_N_o_t$method %in% c("elim", "weight", "lea") & orig_GO_N_o_t$fdr == "fdr"),]
+orig_GO_N_o_t <- orig_GO_N_o_t[-which(orig_GO_N_o_t$N_sig == 0),]
+
+```
+
+
+## Sampled Data
+
+
+### ALL DATA
+```{r}
+
+fc_N <- as.data.frame(cbind(0:max(results_orig$seq_info$nmember_real), sapply(0:max(results_orig$seq_info$nmember_real),
+                                                    function(x) median(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_real > x)])))); colnames(fc_N) <- c("N", "medianFC")
+
+slope <- seq(0,0.35,0.05)
+buchstab <- c("A", "B", "C", "D", "E", "F", "G", "H")
+
+par(mfrow=c(2,4))
+for(j in 1:8){
+plot(x=1:500, y=sapply(1:500, function(y) median(orig_results[[j]]$classic$trans[,1][which(x$n >= y)], na.rm=T)), type="l", ylim=c(-1, 1), xlab="Number of annotated GO terms", ylab="Cumulative Median log2FC", main=paste0(buchstab[j], ") ", "slope: ", slope[j]))
+for(i in 2:100){
+  lines(x=1:500, y=sapply(1:500, function(y) median(orig_results[[j]]$classic$trans[,i][which(x$n >= y)], na.rm=T)))
+}
+if(j == 6){
+  lines(fc_N$N, fc_N$medianFC, col="blue") 
+}
+lines(x=1:500, sapply(1:500, function(y) median(unlist(orig_results[[j]]$classic$trans[which(x$n >= y),]), na.rm=T)), col="red")}
+      
+```
+
+
+
+```{r}
+## After MWU clutering
+# fc_N <- as.data.frame(cbind(0:max(results_orig$seq_info$nmember_real), sapply(0:max(results_orig$seq_info$nmember_real),
+#                                                     function(x) median(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_real > x)])))); colnames(fc_N) <- c("N", "medianFC")
+# 
+# slope <- seq(0,0.35,0.05)
+# buchstab <- c("A", "B", "C", "D", "E", "F", "G", "H")
+# 
+# par(mfrow=c(2,4))
+# for(j in 1:8){
+# plot(x=1:300, y=sapply(1:300, function(x) median(orig_mwu[[j]]$trans[,1][which(orig_mwu[[j]]$misc$trans$GO_N >= x)], na.rm=T)), type="l", ylim=c(-1, 1), xlab="Number of annotated GO terms", ylab="Cumulative Median log2FC", main=paste0(buchstab[j], ") ", "slope: ", slope[j]))
+# for(i in 2:100){
+#   lines(x=1:300, y=sapply(1:300, function(x) median(orig_mwu[[j]]$trans[,i][which(orig_mwu[[j]]$misc$trans$GO_N >= x)], na.rm=T)))
+# }
+# if(j == 6){
+#   lines(fc_N$N, fc_N$medianFC, col="blue") 
+# }
+# lines(x=1:300, sapply(1:300, function(x) median(unlist(orig_mwu[[j]]$trans[which(orig_mwu[[j]]$misc$trans$GO_N >= x),]), na.rm=T)), col="red")}
+#       
+```
+
+```{r}
+par(mfrow=c(1,1))
+mean <- NULL
+for(i in 1:8){
+  mean <- rbind(mean, cbind(mean2 = apply(orig_results[[i]]$classic$trans, 2, median),
+                slope = slope[i]))
+}
+mean <- as.data.frame(mean)
+
+boxplot(mean$mean2~mean$slope, main="Median of Random Sampling iteorigions over slope \n whole annotations", ylab="Median log2 Fold Change", xlab="slope")
+
+# mean <- NULL
+# for(i in 1:8){
+#   mean <- rbind(mean, cbind(mean2 = apply(orig_mwu[[i]]$trans, 2, median),
+#                 slope = slope[i]))
+# }
+# mean <- as.data.frame(mean)
+# 
+# boxplot(mean$mean2~mean$slope, main="Median of Random Sampling iteorigions over slope \n after MWU clustering of annotations", ylab="Median log2 Fold Change", xlab="slope")
+```
+
+
+```{r}
+get.GO.term.data <- function(data, data_mwu, ks=T){
+  if(ks==T){
+    fin.data <- NULL
+    for(i in 1:length(data)){
+      int.data <- NULL
+      c <- apply(data[[i]][["classic"]][["GOterms"]],2, function(x) length(which(x < 0.05))/3185)
+      c_fdr <- apply(data[[i]][["classic"]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05))/3185)
+      
+      e <- apply(data[[i]][["elim"]][["GOterms"]],2, function(x) length(which(x < 0.05))/3185)
+      e_fdr <- apply(data[[i]][["elim"]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05))/3185)
+      
+      w <- apply(data[[i]][["weight"]][["GOterms"]],2, function(x) length(which(x < 0.05))/3185)
+      w_fdr <- apply(data[[i]][["weight"]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05))/3185)
+      
+      l <- apply(data[[i]][["lea"]][["GOterms"]],2, function(x) length(which(x < 0.05))/3185)
+      l_fdr <- apply(data[[i]][["lea"]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05))/3185)
+      
+      m <- apply(data_mwu[[i]][["GOterms"]],2, function(x) length(which(x < 0.05))/2124)
+      m_fdr <- apply(data_mwu[[i]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05))/2124)
+      
+      int.data <- cbind(N= c(c, c_fdr, e, e_fdr, w, w_fdr, l, l_fdr, m, m_fdr),
+                        method = rep(c("classic", "elim", "weight", "lea", "mwu"), each=200),
+                        fdr = rep(c("no fdr", "fdr"), each=100, times=5))
+      
+      fin.data <- rbind(fin.data, int.data)
+    }
+    
+    fin.data <- as.data.frame(cbind(fin.data, slope=rep(seq(0.0,0.35,0.05), each=1000)))
+    fin.data$N <- as.numeric(fin.data$N)
+  }
+  return(fin.data)
+  
+}
+
+orig_GO_N <- get.GO.term.data(orig_results, orig_mwu)
+
+
+```
+
+```{r}
+
+
+orig_GO_N <- orig_GO_N[-which(orig_GO_N$method %in% c("elim", "weight") & orig_GO_N$fdr == "fdr"),]
+ggplot(data=orig_GO_N[orig_GO_N$method!="lea",], mapping=aes(x=slope, y=N,col=fdr))+
+  geom_boxplot()+
+  facet_wrap(~method)+
+  # geom_jitter(width=0.01)+
+  theme_minimal()
+
+orig_GO_N %>% group_by(method, slope, fdr) %>% summarise(median=median(N), mean=mean(N/100), max=max(N/100), min=min(N/100)) -> sumitup
+sumitup <- sumitup[-which(sumitup$method %in% c("weight", "elim") & sumitup$fdr == "fdr"),]
+```
+
+### FDR of GO terms in each method over its Number of transcripts
+
+
+
+
+```{r}
+ggplot(data = orig_GO_N_o_t[orig_GO_N_o_t$method=="classic",], mapping=aes(x=N_trans, y=N_sig/100, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+   ggtitle("classic")+  
+  scale_x_log10()+
+  theme_minimal()+
+  xlab("Number of Transcripts")+
+  ylab("Percentage of times a GO term was deemed singificant in random sampling")+
+  theme(axis.text.x = element_text(angle=45))
+```
+
+```{r}
+ggplot(data = orig_GO_N_o_t[orig_GO_N_o_t$method=="elim",], mapping=aes(x=N_trans, y=N_sig/100, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("elim")+
+  scale_x_log10()+
+  theme_minimal()+
+  xlab("Number of Transcripts")+
+  ylab("Percentage of times a GO term was deemed singificant in random sampling")+
+  theme(axis.text.x = element_text(angle=45))
+```
+
+```{r}
+ggplot(data = orig_GO_N_o_t[orig_GO_N_o_t$method=="weight",], mapping=aes(x=N_trans, y=N_sig/100, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+   ggtitle("weight")+
+    scale_x_log10()+
+  theme_minimal()+
+  xlab("Number of Transcripts")+
+  ylab("Percentage of times a GO term was deemed singificant in random sampling")+
+  theme(axis.text.x = element_text(angle=45))
+```
+
+```{r}
+ggplot(data = orig_GO_N_o_t[orig_GO_N_o_t$method=="mwu",], mapping=aes(x=N_trans, y=N_sig/100, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("MWU")+
+  scale_x_log10()+
+  theme_minimal()+
+  xlab("Number of Transcripts")+
+  ylab("Percentage of times a GO term was deemed singificant in random sampling")+
+  theme(axis.text.x = element_text(angle=45))
+```
+
+
+## Fold Change vs number of Membership in significant GO terms
+
+
+```{r}
+ggplot(data=orig_fc_o_trans[orig_fc_o_trans$method=="classic",], mapping=aes(x=log2FC, y=N, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("classic")+
+  ylab("Number of GO Terms per transcript")+
+  xlab("log2 Fold Change")+
+  scale_y_log10()+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data=orig_fc_o_trans[orig_fc_o_trans$method=="elim",], mapping=aes(x=log2FC, y=N, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("elim")+
+  ylab("Number of GO Terms per transcript")+
+  xlab("log2 Fold Change")+
+  scale_y_log10()+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data=orig_fc_o_trans[orig_fc_o_trans$method=="lea",], mapping=aes(x=log2FC, y=N, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("Weight")+
+  ylab("Number of GO Terms per transcript")+
+  xlab("log2 Fold Change")+
+  scale_y_log10()+
+  theme_minimal()
+
+
+```
+
+```{r}
+ggplot(data=orig_fc_o_trans[orig_fc_o_trans$method=="mwu",], mapping=aes(x=log2FC, y=N, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ylab("Number of GO Terms per transcript")+
+  xlab("log2 Fold Change")+
+  ggtitle("mwu")+
+  scale_y_log10()+
+  theme_minimal()
+```
+
+
+### Median log2FC of all transcripts with a number of sig GO terms
+
+#### Classic 
+```{r}
+
+get_lines <- function(fcvals, nvals, iterations=100, max=300){
+  int.data <- data.frame(N = seq(1,max,1))
+  for(i in 1:iterations){
+    print(i)
+    int.data <- cbind(int.data, sapply(1:max, function(x) median(as.numeric(fcvals[,i][which(nvals[,i] >= x)])), USE.NAMES = F))
+  }
+  return(int.data)
+}
+
+
+par(mfrow=c(2,4))
+
+c <- NULL
+for(j in 1:8){
+test <- get_lines(fcvals = orig_results[[j]]$classic$trans, nvals = orig_results[[j]]$classic$trans_n)
+plot(x=log10(1:300), test[,2], type="l", xlim=c(0,log10(100)), ylim=c(-2,2), xaxt="n",
+     xlab="Number of significant GO terms", ylab="Cumulative Median log2FC", main=paste0(buchstab[j], ") ", "slope: ", slope[j]))
+axis(side=1, at=log10(c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000)), labels=c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000), las=3)
+for(i in 3:100){
+  lines(log10(1:300), test[,i])
+}
+lines(x=log10(1:300), apply(test[,-1],1,function(x) median(x, na.rm=T)), col="red")
+c <- rbind(c, cbind(log2fc = apply(test[,-1],1,function(x) median(x, na.rm=T)),
+           method="classic",
+           N=1:300,
+           slope=slope[j]))
+           }
+```
+
+
+#### Classic  FDR
+
+```{r}
+par(mfrow=c(2,4))
+c_fdr <- NULL
+for(j in 1:8){
+test <- get_lines(fcvals = orig_results[[j]]$classic$trans, nvals = orig_results[[j]]$classic$trans_n_fdr)
+plot(x=log10(1:300), test[,2], type="l", xlim=c(0,log10(100)), ylim=c(-2,2), xaxt="n",
+     xlab="Number of significant GO terms", ylab="Cumulative Median log2FC", main=paste0(buchstab[j], ") ", "slope: ", slope[j]))
+axis(side=1, at=log10(c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000)), labels=c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000), las=3)
+for(i in 3:100){
+  lines(log10(1:300), test[,i])
+}
+lines(x=log10(1:300), apply(test[,-1],1,function(x) median(x, na.rm=T)), col="red")
+c_fdr <- rbind(c_fdr, cbind(log2fc = apply(test[,-1],1,function(x) median(x, na.rm=T)),
+           method="classic fdr",
+           N=1:300,
+           slope=slope[j]))
+           }
+```
+
+#### ELIM
+
+
+```{r}
+par(mfrow=c(2,4))
+
+e <- NULL
+for(j in 1:8){
+test <- get_lines(fcvals = orig_results[[j]]$elim$trans, nvals = orig_results[[j]]$elim$trans_n)
+plot(x=log10(1:300), test[,2], type="l", xlim=c(0,log10(100)), ylim=c(-2,2), xaxt="n",
+     xlab="Number of significant GO terms", ylab="Cumulative Median log2FC", main=paste0(buchstab[j], ") ", "slope: ", slope[j]))
+axis(side=1, at=log10(c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000)), labels=c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000), las=3)
+for(i in 3:100){
+  lines(log10(1:300), test[,i])
+}
+lines(x=log10(1:300), apply(test[,-1],1,function(x) median(x, na.rm=T)), col="red")
+e <- rbind(e, cbind(log2fc = apply(test[,-1],1,function(x) median(x, na.rm=T)),
+           method="elim",
+           N=1:300,
+           slope=slope[j]))
+           }
+```
+
+
+#### Weight
+
+
+```{r}
+par(mfrow=c(2,4))
+w <- NULL
+
+for(j in 1:8){
+test <- get_lines(fcvals = orig_results[[j]]$weight$trans, nvals = orig_results[[j]]$weight$trans_n)
+plot(x=log10(1:300), test[,2], type="l", xlim=c(0,log10(100)), ylim=c(-2,2), xaxt="n",
+     xlab="Number of significant GO terms", ylab="Cumulative Median log2FC", main=paste0(buchstab[j], ") ", "slope: ", slope[j]))
+axis(side=1, at=log10(c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000)), labels=c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000), las=3)
+for(i in 3:100){
+  lines(log10(1:300), test[,i])
+}
+lines(x=log10(1:300), apply(test[,-1],1,function(x) median(x, na.rm=T)), col="red")
+
+w <- rbind(w, cbind(log2fc = apply(test[,-1],1,function(x) median(x, na.rm=T)),
+           method="weight",
+           N=1:300,
+           slope=slope[j]))
+           }
+```
+
+#### MWU
+
+```{r}
+par(mfrow=c(2,4))
+
+m <- NULL
+for(j in 1:8){
+test <- get_lines(fcvals = orig_mwu[[j]]$trans, nvals = orig_mwu[[j]]$trans_n)
+plot(x=log10(1:300), test[,2], type="l", xlim=c(0,log10(100)), ylim=c(-2,2), xaxt="n",
+     xlab="Number of significant GO terms", ylab="Cumulative Median log2FC", main=paste0(buchstab[j], ") ", "slope: ", slope[j]))
+axis(side=1, at=log10(c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000)), labels=c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000), las=3)
+for(i in 3:100){
+  lines(log10(1:300), test[,i])
+}
+lines(x=log10(1:300), apply(test[,-1],1,function(x) median(x, na.rm=T)), col="red")
+m <- rbind(m, cbind(log2fc = apply(test[,-1],1,function(x) median(x, na.rm=T)),
+           method="mwu",
+           N=1:300,
+           slope=slope[j]))
+           }
+```
+
+#### MWU FDR
+
+```{r}
+par(mfrow=c(2,4))
+
+m_fdr <- NULL
+for(j in 1:8){
+test <- get_lines(fcvals = orig_mwu[[j]]$trans, nvals = orig_mwu[[j]]$trans_n_fdr)
+plot(x=log10(1:300), test[,2], type="l", xlim=c(0,log10(100)), ylim=c(-2,2), xaxt="n",
+     xlab="Number of significant GO terms", ylab="Cumulative Median log2FC", main=paste0(buchstab[j], ") ", "slope: ", slope[j]))
+axis(side=1, at=log10(c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000)), labels=c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000), las=3)
+for(i in 3:100){
+  lines(log10(1:300), test[,i])
+}
+lines(x=log10(1:300), apply(test[,-1],1,function(x) median(x, na.rm=T)), col="red")
+m_fdr <- rbind(m_fdr, cbind(log2fc = apply(test[,-1],1,function(x) median(x, na.rm=T)),
+           method="mwu fdr",
+           N=1:300,
+           slope=slope[j]))
+           }
+```
+
+```{r}
+orig_med_lines <- as.data.frame(cbind(rbind(c, c_fdr, e, w, m, m_fdr), data="original"))
+orig_med_lines$log2fc <- as.numeric(orig_med_lines$log2fc)
+orig_med_lines$N <- as.numeric(orig_med_lines$N)
+```
+
+```{r}
+par(mfrow=c(2,3))
+colfunc <- colorRampPalette(c("grey", "orange"))
+
+for(j in 1:length(unique(orig_med_lines$method))){
+  print(j)
+  method=unique(orig_med_lines$method)[j]
+  plot(log10(orig_med_lines$N[orig_med_lines$method==method & orig_med_lines$slope == slope[j]]), orig_med_lines$log2fc[orig_med_lines$method==method & orig_med_lines$slope == slope[1]], type="l", ylim=c(-2,2), xlab="Number of significant GO terms", ylab="Cumulative Median log2FC", main=paste0(buchstab[j], ") method: ", method), xaxt="n")
+  axis(side=1, at=log10(c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000)), labels=c(1,3,5,10,25,50,100,250,500,1000,2500,5000,10000), las=3, col = colfunc(8)[1])
+  for(i in 2:8){
+    lines(log10(orig_med_lines$N[orig_med_lines$method==method & orig_med_lines$slope == slope[i]]), orig_med_lines$log2fc[orig_med_lines$method==method & orig_med_lines$slope == slope[i]], type="l", ylim=c(-2,2), col = colfunc(8)[i])
+  }
+  legend("topleft", legend=slope, col=colfunc(8), lty = 1, horiz = F, cex=.7, bg="transparent", bty="n")
+}
+```
+

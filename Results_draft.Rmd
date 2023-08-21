@@ -1,0 +1,602 @@
+---
+title: "Results_pre"
+author: "Felix Boehm"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    smooth_scroll: yes
+    fig_width: 15
+  pdf_document:
+    toc: yes
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+<style type="text/css">
+.main-container {
+  max-width: 1800px !important;
+  margin: auto;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  error = F,
+	message = FALSE,
+	warning = FALSE,
+	include = T,
+	echo = F,
+	fig.width = 15,
+  fig.height = 7,
+	options(mc_doScale_quiet=TRUE),
+  results = 'asis'
+)
+library(knitr)
+library(gtsummary)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+setwd("C:/Users/iXilef/OneDrive/Master/initial")
+load("20230708")
+```
+
+# Introduction
+In this small document I will start the presentation of the results.The first section concerns itself with  the explorative data analysis of the original dataset which consists of differential expression results from a RNA sequencing run between several conditions. After that the different results of the different algorithms will be presented before more formal testing is applied to the previously introduced results. 
+
+# EDA Original Data
+
+The original data from a Differential expression analysis of a RNA-sequencing dataset includes 8546 transcripts from which 1107 were deleted due to them having no associated GO terms in the annotation file. The mean and median of the log2 Fold Change of the chosen differential expression comparison is 0.093 and 0.001 respectively. In sum 3133 GO terms are present in the annotation file with them having, on average, 146.9 transcripts or 33 transcripts by taking the median. Further Numbers are presented in the table below. 
+
+
+
+
+|             |             | N    | mean   | max min        | median  | 25%/75% Quantile |
+| :---------- | :---------- | :--- | :----- | :------------- | :------ | :--------------- |
+| Transcripts | Fold Change | 7439 | 0\.093 | [5\.81; -6.26] | -0\.001 | -0\.44; 0.48     |
+|             |             |      | mean of \n transcripts per GO       |                |         |                  |
+| Go Term     |             | 3133 | 146\.9 | [7592; 10]     | 33      | 16; 87           |
+
+The next dotplot describes the average log2FC in each GO term against the log of the number of annotated in the dataset. The log was chosen to give a more spread out view as otherwise the maximum annotation goes beyond 6000 and the lower regions are not as distinguishable. The whole point cloud is shifted rightwards or in other words in the positive region. Especially the GO terms with higher numbers are above a mean log2FC of zero. 100 GO terms with over 970 transcripts are exclusively on the positive side of the mean log2FC.
+
+```{r}
+plot(misc$GO$meanFC, log(misc$GO$ntrans_real), main="mean log2FC in each GO term vs. the number of annotated transcripts", ylab="log(Number) of annotated transcripts in the dataset", xlab="Mean log2FC of the transcripts in one GO term")
+```
+
+In Figure XY (below left) the transcripts are plotted by their respective log2FCs and Number of annotated GO terms. This plot implies a quite symetrical  distribution of the log2FCs over the number of annotated GO terms with a higher concentration of on the positive log2FC side in the number of annotations above 400 GO terms.
+
+The right plot displays the overall average number of transcripts of all annotated GO terms of one transcript. Some transcripts share the same number of average transcripts visible in the higher range. The fold changes are distributed around zero with point clouds on the positive log2FC side. 
+
+```{r}
+par(mfrow=c(1,2))
+plot(misc$trans$FC.sep, misc$trans$nmember_real, main="Number of GO terms annotated to one transcript 
+     vs. the respective log2FC", ylab="Number of annotated GO terms per transcripts", xlab="log2 Fold Change")
+plot(misc$trans$FC.sep, misc$trans$mean_member, main="Average Number of transcripts over all 
+GO terms annotated to one transcript
+     vs. the respective log2FC", ylab="Mean(Number) of transcripts in all annotated GO terms", xlab="log2 Fold Change")
+```
+
+
+Another depiction of the fold change in combination with the number of GO terms annotated to transcripts is the next plot. The mean log2FC is calculated over every transcript which has a certain number of annoated GO terms. This goes from 0 to 656 and shows that with the higher number of annotations the mean log2FC of the transcripts increases. Above 400 n
+
+```{r}
+# get moving median of fc by membership
+fc_N <- as.data.frame(cbind(0:max(misc$trans$nmember_real), sapply(0:max(misc$trans$nmember_real),
+                                                    function(x) median(misc$trans$FC.sep[which(misc$trans$nmember_real > x)])))); colnames(fc_N) <- c("N", "medianFC")
+
+par(mfrow=c(1,1))
+
+plot(fc_N$N, fc_N$medianFC, main="Mean log2FC over the number of annotated GO terms", ylab="Mean log2FC", xlab="Number of annotated GO terms", type="l")
+
+```
+
+In Sum the transcripts in the dataset itself have a tendency to have a higher mean log2FC with an increasing number of annotations. This also aplies to the GO terms.
+
+# Results Enrichment Runs
+
+
+In the following the different methods of the will be examined. The different methods are the hierarchical clustered Wilcoxon test and the Kolmogorov-Smirnov test with four different algorithms: Classic, Elim, weight and lea. Lea might be featured or maybe replaced by something else.
+
+The Barplot and corresponding table describe the number of significant GO terms in each method with and without FDR correction at an \alpha of 0.05. The Elim and weight algoritm (lea probably too) already include a Bonferroni correction during the run. The used fdr correction in the plots is the Benjamini–Hochberg (BH) procedure. Without any correction on the final pvalues the mwu method detects well over 900 GO terms as significant with the classic method detecting less than half of that. The other three methods are in a similar range with the weight method having the least amount detected.
+
+When applying the BH correction method the elim and weight method fall to zero and three significant GO terms and the lea and classic detecting 10 and 30, respectively. The MWU method retains 684 of the original 917 GO terms at an \alpha-level of 0.05.
+
+```{r}
+# get numbers of sig GO terms
+sig_GO <- c(classic=length(which(results_normal$original$ks$classic < 0.05)), elim=length(which(results_normal$original$ks$elim < 0.05)), 
+            weight=length(which(results_normal$original$ks$weight01 < 0.05)), lea=length(which(results_normal$original$ks$lea < 0.05)),
+            mwu=length(which(results_normal$original$mwu$pval < 0.05)))
+
+
+# get numbers of sig GO terms when fdr
+sig_GO_fdr <- c(classic=length(which(p.adjust(results_normal$original$ks$classic, method="fdr") < 0.05)), elim=length(which(p.adjust(results_normal$original$ks$elim, method="fdr") < 0.05)), 
+            weight=length(which(p.adjust(results_normal$original$ks$weight01, method="fdr") < 0.05)), lea=length(which(p.adjust(results_normal$original$ks$lea, method="fdr") < 0.05)),
+            lea=length(which(p.adjust(results_normal$original$mwu$pval, method="fdr") < 0.05)))
+
+
+par(mfrow=c(1,2))
+barplot(sig_GO)
+barplot(sig_GO_fdr)
+
+kable(rbind(sig_GO, sig_GO_fdr))
+```
+
+- Put in venn diagramm on how many GO terms they agree (only if needed)
+
+
+Figure XY below shows the number of significant GO terms per transcript over its respective log2FC value. The different methods are stacked behind each other from the highest number of significant GO terms to the lowest. They are also indicated by the color. The vertical line describes the mean log2FC value for every transcript which has over 20 significant GO terms detected. This value was taken to indicate the right shift of the log2FC mean with an increasing number of GO terms. Because some methods cap out at around 50 GO terms the low value was chosen. (describe more)
+For a more detailed view refer to the plot below this one.
+
+It describes the median (need to change to mean, but they are pretty similar) log2FC of the transcripts which have a certain number of significant GO terms annotated to them. All lines indicate an increasing median log2FC with an increasing number of significant GO terms.  The mwu (black) and classic (blue) method have the highest number of GO terms marked as significant which results in a less steep increase of the curve. The weight(grey) and elim(orange) are similar in their increase and also the maximum Number of GO terms. The green line, which is the lea method has the steepest incline and also caps out earlier on the numbers of GO terms.
+
+```{r}
+par(mfrow=c(2,1), mai=c(1,1,0.5,1))
+
+seq_info <- results_normal$original$seq_info
+
+plot(seq_info$FC.sep, seq_info$nmember_mwu, col="black", ylab="Number of times Transcript is a member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms
+     black=MWU; blue=classic; orange=elim; green=weight; lea=grey  Vertical lines: Mean(FC) | N > 20")
+abline(v=mean(seq_info$FC.sep[which(seq_info$nmember_mwu > 20)]), col="black")
+points(seq_info$FC.sep, seq_info$nmember_classic_sig, col="blue")
+abline(v=mean(seq_info$FC.sep[which(seq_info$nmember_classic_sig > 20)]), col="blue")
+points(seq_info$FC.sep, seq_info$nmember_elim_sig, col="orange")
+abline(v=mean(seq_info$FC.sep[which(seq_info$nmember_elim_sig > 20)]), col="orange")
+points(seq_info$FC.sep, seq_info$nmember_lea_sig, col="green")
+abline(v=mean(seq_info$FC.sep[which(seq_info$nmember_weight_sig > 20)]), col="green")
+points(seq_info$FC.sep, seq_info$nmember_weight_sig, col="grey")
+abline(v=mean(seq_info$FC.sep[which(seq_info$nmember_lea_sig > 20)]), col="grey")
+
+plot(orig_fc_N$N, orig_fc_N$median_mwu, col="black", type="l", ylim=c(0, 1.7), main="Median log2FC of the transcripts over the number of significant GO terms
+     black=MWU; blue=classic; orange=elim; green=weight; lea=grey", ylab="Median log2FC", xlab="Number of significant GO terms")
+# text(orig_fc_N$N, orig_fc_N$median_mwu, labels=orig_fc_N$N_mwu)
+lines(orig_fc_N$N, orig_fc_N$median_classic, col="blue")
+# text(orig_fc_N$N, orig_fc_N$median_classic, labels=orig_fc_N$N_classic)
+lines(orig_fc_N$N, orig_fc_N$median_elim, col="orange")
+# text(orig_fc_N$N, orig_fc_N$median_elim, labels=orig_fc_N$N_elim)
+lines(orig_fc_N$N, orig_fc_N$median_weight01, col="green")
+# text(orig_fc_N$N, orig_fc_N$median_weight01, labels=orig_fc_N$N_weight01)
+lines(orig_fc_N$N, orig_fc_N$median_lea, col="gray")
+# text(orig_fc_N$N, orig_fc_N$median_lea, labels=orig_fc_N$N_lea)
+
+```
+
+## Linear models (BAD)
+
+In this little section linear models are attempted to model the relationship between the log2FC and the number of significant GO terms on the transcript level. The four models are displayed in the table below. (no description)
+
+```{r}
+par(mfrow=c(2,2))
+
+mwu_lin <- lm(seq_info$FC.sep~log10(seq_info$nmember_mwu+1))
+classic_lin <- lm(seq_info$FC.sep~log10(seq_info$nmember_classic_sig+1))
+elim_lin <- lm(seq_info$FC.sep~log10(seq_info$nmember_elim_sig+1))
+weight_lin <- lm(seq_info$FC.sep~log10(seq_info$nmember_weight_sig+1))
+
+tab_model(mwu_lin, classic_lin, elim_lin, weight_lin, dv.labels=c("MWU", "Classic", "Elim", "Weight"))
+```
+
+Below the linear models are shown over the dotplots... As expected no good fit. 
+
+```{r}
+par(mfrow=c(2,2))
+
+plot(seq_info$FC.sep~log10(seq_info$nmember_mwu+1), col="grey")
+abline(mwu_lin, col="red")
+
+plot(seq_info$FC.sep~log10(seq_info$nmember_classic_sig+1), col="grey")
+abline(classic_lin, col="red")
+
+plot(seq_info$FC.sep~log10(seq_info$nmember_elim_sig+1), col="grey")
+abline(elim_lin, col="red")
+
+plot(seq_info$FC.sep~log10(seq_info$nmember_weight_sig+1), col="grey")
+abline(weight_lin, col="red")
+
+```
+
+And QQ Plots for each of the model. Bad fit... one could argue for MWU and classic but all is lost on elim and weight.
+
+```{r}
+par(mfrow=c(2,2))
+
+plot(mwu_lin, which=2, main="MWU")
+plot(classic_lin, which=2, main="classic")
+plot(elim_lin, which=2, main="elim")
+plot(weight_lin, which=2, main="weight")
+```
+
+
+# Results Resampling Trys
+
+## Reshuffle
+
+
+Below the results of the reshuffling run will be displayed. In the reshuffling the log2FC values of the transcript were randomly resampled between the transcripts before each iteration of the run. In sum 100 iterations were run per method. 
+
+The figures below depict the percentage of how many times a certain GO term had a p-value below 0.05 in each of the runs. The x-axis denotes the number of transcripts annotated to each GO term. The x axis for the MWU method is shorter than the others because the method excludes GO terms when the percentage of the number of transcripts in one GO term reaches a certain threshold. In this case the threshold was set to 0.1. So when a GO term contains over 10% of all transcripts it is excluded. 
+
+```{r}
+par(mfrow=c(2,2))
+threshold <- 0.05
+
+over_threshold <- function(data, pvalcols, threshold = 0.05){
+  return(apply(data[,pvalcols], 1, function(x) length(which(x < threshold))))
+}
+
+plot(results_reshuffle$mwu$pval$nseqs, over_threshold(results_reshuffle$mwu$pval, 3:103, threshold)/100, main="Percentage of times a GO term was deemed significant
+     at alpha=0.05 in the MWU reshuffle (B=100)", ylab="Percentage of detected GO terms", xlab="Number of transcripts")
+
+plot(results_reshuffle$classic$pval$Annotated, over_threshold(results_reshuffle$classic$pval, 6:106, threshold)/100, main="Percentage of times a GO term was deemed significant
+     at alpha=0.05 in the classic reshuffle (B=100)", ylab="Percentage of detected GO terms", xlab="Number of transcripts")
+
+plot(results_reshuffle$elim$pval$Annotated, over_threshold(results_reshuffle$elim$pval, 6:106, threshold)/100, main="Percentage of times a GO term was deemed significant
+     at alpha=0.05 in the Elim reshuffle (B=100)", ylab="Percentage of detected GO terms", xlab="Number of transcripts")
+
+plot(results_reshuffle$weight$pval$Annotated, over_threshold(results_reshuffle$weight$pval, 6:106, threshold)/100, main="Percentage of times a GO term was deemed significant
+     at alpha=0.05 in the weight reshuffle (B=100)", ylab="Percentage of detected GO terms", xlab="Number of transcripts")
+
+```
+
+
+The next plots have the runs from the original analysis plotted against all of the reshuffling runs. The Number of significant GO term per transcript over its log2FC is displayed. The red are the points for the original analysis and the grey for the 100 random reshuffling runs. (describe further)
+
+
+```{r}
+# MWU
+par(mfrow=c(2,2))
+
+plot(results_reshuffle$mwu$seq[,3], results_reshuffle$mwu$seq_n[,3], ylim=c(0, 250), xlim=c(-6.5, 6), col="grey", ylab="Number of times Transcript was member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms (MWU FC Shuffle) \n red = real data, grey = random resampling of FC")
+for(i in 4:102){
+  points(results_reshuffle$mwu$seq[,i], results_reshuffle$mwu$seq_n[,i], col="grey")
+}
+
+over_threshold2 <- function(data, pvalcols, threshold = 0.05){
+  listy <- c()
+  for(i in 1:dim(data)[1]){
+    listy <- c(listy, length(which(data[i,pvalcols] < threshold)))
+  }
+  return(listy)
+}
+
+points(seq_info$FC.sep, seq_info$nmember_mwu, col="red")
+
+# classic
+# keep is needed because from in the reshuffle run all transcripts get new fc values assigned
+
+keep <- which(results_reshuffle$classic$seq$transcript %in% results_reshuffle$classic$seq_n$transcript)
+
+plot(results_reshuffle$classic$seq[keep,3], results_reshuffle$classic$seq_n[,3], ylim=c(0, 250), xlim=c(-6.5, 6), col="grey", ylab="Number of times Transcript was member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms (classic FC Shuffle) ) \n red = real data, grey = random resampling of FC")
+for(i in 4:101){
+  points(results_reshuffle$classic$seq[keep,i], results_reshuffle$classic$seq_n[,i], col="grey")
+}
+points(seq_info$FC.sep, seq_info$nmember_classic_sig, col="red")
+
+# elim
+
+plot(results_reshuffle$elim$seq[keep,3], results_reshuffle$elim$seq_n[,3], ylim=c(0, 100), xlim=c(-6.5, 6), col="grey", ylab="Number of times Transcript was member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms (elim FC Shuffle) ) \n red = real data, grey = random resampling of FC")
+for(i in 4:101){
+  points(results_reshuffle$elim$seq[keep,i], results_reshuffle$elim$seq_n[,i], col="grey")
+}
+points(seq_info$FC.sep, seq_info$nmember_elim_sig, col="red")
+
+# weight
+
+
+plot(results_reshuffle$weight$seq[keep,3], results_reshuffle$weight$seq_n[,3], ylim=c(0, 100), xlim=c(-6.5, 6), col="grey", ylab="Number of times Transcript was member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms (weight01 FC Shuffle) ) \n red = real data, grey = random resampling of FC")
+for(i in 4:101){
+  points(results_reshuffle$weight$seq[keep,i], results_reshuffle$weight$seq_n[,i], col="grey")
+}
+points(seq_info$FC.sep, seq_info$nmember_weight_sig, col="red")
+
+
+```
+
+
+The following figures describe the moving median of the transcripts over the number of significant GO terms. Black is the original analysis, red the median of the reshuffling runs and the grey are the reshuffled runs. (describe better and further)
+
+```{r}
+par(mfrow=c(2,2))
+# mwu
+
+plot(mwu_shuffle$N, mwu_shuffle[,2], type="l", ylim=c(-1.6,2.4), col="grey", main="median log2FC of all transcripts with a certain number of significant GO terms (MWU)
+     grey=resampling(N=100), red=median, black=original", ylab="median log2FC", xlab="Number of GO terms")
+for(i in 2:101){
+  lines(mwu_shuffle$N, mwu_shuffle[,i], col="grey")
+}
+lines(1:289, apply(mwu_shuffle[,c(2:101)],1, mean), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_mwu, col="black")
+
+
+# classic
+
+plot(classic_shuffle$N, classic_shuffle[,2], type="l", ylim=c(-2.7,3.4), xlim=c(0,120), col="grey", main="median log2FC of all transcripts with a certain number of significant GO terms (Classic)
+     grey=resampling(N=100), red=median, black=original", ylab="median log2FC", xlab="Number of GO terms")
+for(i in 3:101){
+  lines(classic_shuffle$N, classic_shuffle[,i], col="grey")
+}
+lines(1:289, apply(classic_shuffle[,c(2:101)],1, function(x) mean(x, na.rm=T)), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_classic, col="black")
+
+
+# elim
+
+plot(elim_shuffle$N, elim_shuffle[,2], type="l", ylim=c(-2.7,3.4), xlim=c(0,50), col="grey", main="median log2FC of all transcripts with a certain number of significant GO terms (elim)
+     grey=resampling(N=100), red=median, black=original", ylab="median log2FC", xlab="Number of GO terms")
+for(i in 3:101){
+  lines(elim_shuffle$N, elim_shuffle[,i], col="grey")
+}
+lines(1:289, apply(elim_shuffle[,c(2:101)],1, function(x) mean(x, na.rm=T)), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_elim, col="black")
+
+# weight
+
+plot(weight_shuffle$N, weight_shuffle[,2], type="l", ylim=c(-2.7,3.4), xlim=c(0,50), col="grey", main="median log2FC of all transcripts with a certain number of significant GO terms (weight)
+     grey=resampling(N=100), red=median, black=original", ylab="median log2FC", xlab="Number of GO terms")
+for(i in 3:101){
+  lines(weight_shuffle$N, weight_shuffle[,i], col="grey")
+}
+lines(1:289, apply(weight_shuffle[,c(2:101)],1, function(x) mean(x, na.rm=T)), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_weight01, col="black")
+
+```
+
+
+
+## log2FC resampled from N(0, var(log2FC))
+
+Plots are analogous to Reshuffle
+
+```{r}
+par(mfrow=c(2,2))
+plot(results_normal$mwu$pval$nseqs, over_threshold(results_normal$mwu$pval, 3:103, threshold)/100)
+
+plot(results_normal$classic$pval$Annotated, over_threshold(results_normal$classic$pval, 6:106, threshold)/100)
+
+plot(results_normal$elim$pval$Annotated, over_threshold(results_normal$elim$pval, 6:106, threshold)/100)
+
+plot(results_normal$weight$pval$Annotated, over_threshold(results_normal$weight$pval, 6:106, threshold)/100)
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+# mwu
+plot(results_normal$mwu$seq[,3],results_normal$mwu$seq_n[,3], ylim=c(0, 250), xlim=c(-6.5, 6), col="grey", ylab="Number of times Transcript was member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms (MWU FC N(0, sd(realFC)) ) \n red = real data, grey = random resampling of FC")
+for(i in 4:102){
+  points(results_normal$mwu$seq[,i], results_normal$mwu$seq_n[,i], col="grey")
+}
+points(seq_info$FC.sep, seq_info$nmember_mwu, col="red")
+
+# classic
+
+plot(results_normal$classic$seq[keep,3], results_normal$classic$seq_n[,3], ylim=c(0, 250), xlim=c(-6.5, 6), col="grey", ylab="Number of times Transcript was member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms (Classic FC N(0, sd(realFC)) ) \n red = real data, grey = random resampling of FC")
+for(i in 4:101){
+  points(results_normal$classic$seq[keep,i], results_normal$classic$seq_n[,i], col="grey")
+}
+points(seq_info$FC.sep, seq_info$nmember_classic_sig, col="red")
+
+# elim
+
+plot(results_normal$elim$seq[keep,3], results_normal$elim$seq_n[,3], ylim=c(0, 100), xlim=c(-6.5, 6), col="grey", ylab="Number of times Transcript was member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms (elim FC N(0, sd(realFC)) ) \n red = real data, grey = random resampling of FC")
+for(i in 4:101){
+  points(results_normal$elim$seq[keep,i], results_normal$elim$seq_n[,i], col="grey")
+}
+points(seq_info$FC.sep, seq_info$nmember_elim_sig, col="red")
+
+# weight
+
+plot(results_normal$weight$seq[keep,3], results_normal$weight$seq_n[,3], ylim=c(0, 100), xlim=c(-6.5, 6), col="grey", ylab="Number of times Transcript was member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms (weight01 FC N(0, sd(realFC)) ) \n red = real data, grey = random resampling of FC")
+for(i in 4:101){
+  points(results_normal$weight$seq[keep,i],results_normal$weight$seq_n[,i], col="grey")
+}
+points(seq_info$FC.sep, seq_info$nmember_weight_sig, col="red")
+
+```
+
+
+```{r}
+# lines for normal runs
+par(mfrow=c(2,2))
+
+plot(mwu_norm$N, mwu_norm[,2], type="l", ylim=c(-1.6,2.4), col="grey")
+for(i in 2:101){
+  lines(mwu_norm$N, mwu_norm[,i], col="grey")
+}
+lines(1:289, apply(mwu_norm[,c(2:101)],1, mean), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_mwu, col="black")
+
+
+plot(classic_norm$N, classic_norm[,2], type="l", ylim=c(-2.7,3.4), xlim=c(0,120), col="grey")
+for(i in 3:101){
+  lines(classic_norm$N, classic_norm[,i], col="grey")
+}
+lines(1:289, apply(classic_norm[,c(2:101)],1, function(x) mean(x, na.rm=T)), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_classic, col="black")
+
+plot(elim_norm$N, elim_norm[,2], type="l", ylim=c(-2.7,3.4), xlim=c(0,50), col="grey")
+for(i in 3:101){
+  lines(elim_norm$N, elim_norm[,i], col="grey")
+}
+lines(1:289, apply(elim_norm[,c(2:101)],1, function(x) mean(x, na.rm=T)), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_elim, col="black")
+
+plot(weight_norm$N, weight_norm[,2], type="l", ylim=c(-2.7,3.4), xlim=c(0,50), col="grey")
+for(i in 3:101){
+  lines(weight_norm$N, weight_norm[,i], col="grey")
+}
+lines(1:289, apply(weight_norm[,c(2:101)],1, function(x) mean(x, na.rm=T)), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_weight01, col="black")
+```
+
+## log2FC sampled from varying conditions
+
+Conditions like talked about
+
+N=1000
+for each run decide on a percentage of transcripts to sample from different distribution than N(0,var(log2FC) between int(5:20), decide on which direction the mean changes with a 50% chance of it being either and then deciding on the mean for the second distribution between 0.5 and 1 or -0.5 and 1, depending on the direction, from a uniform distribution.
+
+
+```{r}
+par(mfrow=c(2,2))
+hist(results_normal2$metadata$mwu$mean, nclass=100, main="Histogram of the Means (MWU)")
+hist(results_normal2$metadata$ks$mean, nclass=100, main="Histogram of the Means (topGO)")
+
+hist(results_normal2$metadata$mwu$percentage, nclass=10, main="Histogram of the Percentages (MWU)")
+hist(results_normal2$metadata$ks$percentage, nclass=10, main="Histogram of the Percentages (topGO)")
+
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(results_normal2$mwu$pval$nseqs, over_threshold(results_normal2$mwu$pval, 3:1003, threshold)/1000)
+
+plot(results_normal2$classic$pval$Annotated, over_threshold(results_normal2$classic$pval, 6:1006, threshold)/1000)
+
+plot(results_normal2$elim$pval$Annotated, over_threshold(results_normal2$elim$pval, 6:1006, threshold)/1000)
+
+plot(results_normal2$weight$pval$Annotated, over_threshold(results_normal2$weight$pval, 6:1006, threshold)/1000)
+```
+
+
+```{r}
+# lines for normal2 runs
+par(mfrow=c(2,2))
+
+plot(mwu_norm_2$N, mwu_norm_2[,2], type="l", ylim=c(-1.6,2.4), col="grey")
+for(i in 2:1001){
+  lines(mwu_norm_2$N, mwu_norm_2[,i], col="grey")
+}
+lines(1:289, apply(mwu_norm_2[,c(2:1001)],1, mean), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_mwu, col="black")
+
+
+plot(classic_norm_2$N, classic_norm_2[,2], type="l", ylim=c(-2.7,3.4), xlim=c(0,120), col="grey")
+for(i in 3:1001){
+  lines(classic_norm_2$N, classic_norm_2[,i], col="grey")
+}
+lines(1:289, apply(classic_norm_2[,c(2:1001)],1, function(x) mean(x, na.rm=T)), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_classic, col="black")
+
+
+plot(elim_norm_2$N, elim_norm_2[,2], type="l", ylim=c(-2.7,3.4), xlim=c(0,50))
+for(i in 3:1001){
+  lines(elim_norm_2$N, elim_norm_2[,i], col="grey")
+}
+lines(1:289, apply(elim_norm_2[,c(2:1001)],1, function(x) mean(x, na.rm=T)), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_elim, col="black")
+
+
+plot(weight_norm_2$N, weight_norm_2[,2], type="l", ylim=c(-2.7,3.4), xlim=c(0,50), col="grey")
+for(i in 3:1001){
+  lines(weight_norm_2$N, weight_norm_2[,i], col="grey")
+}
+lines(1:289, apply(weight_norm_2[,c(2:1001)],1, function(x) mean(x, na.rm=T)), col="red")
+lines(orig_fc_N$N, orig_fc_N$median_weight01, col="black")
+
+```
+
+
+# Formal testing trys
+
+Here I tried to compare each of the transcripts from the original run against the reshuffled runs with a peacock test. This is essentially a multidimensional KS test. 
+
+The matrices held the information of the log2FC and the number of significant GO Terms. 
+
+The plots denote how many transcripts were below alpha = 0.05. No FDR correction applied. 
+
+```{r}
+# results peacock test
+
+peacock_N <- c(mwu_reshuffle = length(which(pvals < 0.05)), classic_reshuffle =length(which(pvals_clas < 0.05)),
+     elim_reshuffle =length(which(pvals_elim < 0.05)), weight_reshuffle =length(which(pvals_weight < 0.05)),
+     mwu_normal = length(which(pvals_norm < 0.05)), classic_normal = length(which(pvals_clas_norm < 0.05)),
+     elim_normal = length(which(pvals_elim_norm < 0.05)), weight_normal = length(which(pvals_weight_norm < 0.05)),
+     mwu_normal2 = length(which(pvals_norm_2 < 0.05)), classic_normal2 = length(which(pvals_clas_norm_2 < 0.05)),
+     elim_normal2 = length(which(pvals_elim_norm_2 < 0.05)), weight_normal2 = length(which(pvals_weight_norm_2 < 0.05)))
+
+par(mar=c(8,4,4,2))
+barplot(peacock_N, las=2)
+
+
+```
+
+# Model the bias for a sampling run
+
+Here the reasoning for the fourth sampling algorithm is given. The table below shows two linear models which model the log2FC over the number of GO terms per transcript as well as the standard deviation of the log2Fc over the given number. The number of GO terms is on a log10 scale for the whole section. The Model fit is far from optimal and therefore a loess curve is fitted further down in the section. 
+```{r}
+par(mfrow=c(1,2))
+misc$trans$nmemberlog10 <- log10(misc$trans$nmember_real)
+real_lm <- lm(FC.sep~nmemberlog10, data=misc$trans)
+
+sd <- unlist(sapply(min(misc$trans$nmember_real):max(misc$trans$nmember_real),
+       function(x) ifelse(length(which(misc$trans$nmember_real==x)) > 0, sd(misc$trans$FC.sep[which(misc$trans$nmember_real==x)]), NA)))
+
+sd <- as.data.frame(cbind(sd, 1:656, unlist(sapply(min(misc$trans$nmember_real):max(misc$trans$nmember_real),
+                                         function(x) length(which(misc$trans$nmember_real==x))))))
+
+colnames(sd) <- c("sd", "nmembers", "ntrans")
+sd <- na.omit(sd)
+sd <- sd[sd$ntrans >4,]
+real_sd <- lm(sd$sd~log10(sd$nmembers))
+
+
+tab_model(real_lm, real_sd, dv.labels=c("log2FC", "SD"))
+
+plot(real_lm, which=2, main="log2FC QQPlot")
+plot(real_sd, which=2, main="SD QQPlot")
+```
+
+The upper left plot shows the linear model through the log2FC and Number of GO terms per transcript. Below that a zoomed in variant of the upper plot is displayed. This gives a better picture of the slope. Also, the loess fit is plotted as a blue line. The right plot depicts the Variance(log2FC) of each number of transcript with the same number of GO terms. The red dots are taken from the real data where at least five transcripts have the same amount of GO terms. The black dots are sampled variances from a Normal distribution with mean = 0.9 (intercept from variance linear model) and variance = ${0.01*exp(1.5*N_{GO})}$ with $N_{GO}$ being the number of GO terms. This function was eyeballed so it fits the original distribution of variances over the number of GO terms.
+
+```{r}
+par(mfrow=c(2,2))
+plot(misc$trans$FC.sep~log10(misc$trans$nmember_real), main="log10(Number of GO Terms) over log2FC per Transcript \n red line = linear regression", ylab="log2FC", xlab="log10 of Number of GO terms per transcript")
+abline(real_lm, col="red")
+
+x <- rep(seq(0, 2.8, 0.01), 100)
+y <- rnorm(length(x), mean=0.90, sd=.01*exp(1.5*x))
+
+plot(x,y,ylim = c(-.5,2.5), xlab = "log10(Number of GOterms)", ylab="Var(log2FC)", main="Sampled Var(log2FC) over log10(Number of GOterms) \n red=real data")
+points(log10(sd$nmembers), sd$sd, col="red", pch=16)
+
+lo <- loess(misc$trans$FC.sep~log10(misc$trans$nmember_real))
+
+
+plot(misc$trans$FC.sep~log10(misc$trans$nmember_real), main="log10(Number of GO Terms) over log2FC per Transcript \n red line = linear regression; blue = loess regression", ylab="log2FC", xlab="log10 of Number of GO terms per transcript", ylim=c(-.2,1))
+abline(real_lm, col="red", lwd=2)
+lines(x[1:length(x)/100], predict(lo, x[1:length(x)/100]), col="blue", lwd=2)
+
+# make loess fit
+
+```
+
+Here the two plots depict a random sampling run based on the number of GO terms. The red dots are the original transcripts with their respective log2FC and Number of GO terms. The black dots are sampled from a Normal distribution $N~(mean, var)$, where var is the function from above. The left plot uses the loess function from the previous plot as a mean function, whereas the right plot uses the linear model for the mean. They look pretty similar, but deviate in the upper region of the GO term numbers, therefore I would probably go for the loess. The variance function is also up for discussion. 
+
+```{r}
+par(mfrow=c(1,2))
+
+y2 <- rnorm(length(x), mean =  predict(lo, x), sd=rnorm(1,mean=.9, sd=.01*exp(1.5*x)))
+
+x2 <- data.frame(nmemberlog10=x)
+y3 <- rnorm(length(x), mean =  predict(real_lm, x2), sd=rnorm(1,mean=.9, sd=.01*exp(1.5*x)))
+
+plot(x,y2, ylim=c(-6,6), main="Predicted by loess", ylab="log2FC", xlab="log10(Number of GO terms)")
+points(misc$trans$FC.sep~log10(misc$trans$nmember_real), col="red")
+
+
+plot(x,y3, ylim=c(-6,6), main="Predicted by lm", ylab="log2FC", xlab="log10(Number of GO terms)")
+points(misc$trans$FC.sep~log10(misc$trans$nmember_real), col="red")
+```
+

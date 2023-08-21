@@ -1,0 +1,728 @@
+---
+title: "Results_pre"
+author: "Felix Boehm"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    smooth_scroll: yes
+    fig_width: 15
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{=html}
+<style type="text/css">
+.main-container {
+  max-width: 1800px !important;
+  margin: auto;
+}
+</style>
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  error = F,
+	message = FALSE,
+	warning = FALSE,
+	include = T,
+	echo = F,
+	fig.width = 15,
+  fig.height = 7,
+	options(mc_doScale_quiet=TRUE),
+  results = 'asis'
+)
+library(knitr)
+library(gtsummary)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(ggplot2)
+library(topGO)
+setwd("C:/Users/iXilef/OneDrive/Master/initial")
+```
+
+```{r}
+load("./data/RMD_rat.RData")
+
+# results_orig$go <- na.omit(results_orig$go)
+```
+
+```{r}
+get.GO.term.data <- function(data, data_mwu, ks=T){
+  if(ks==T){
+    fin.data <- NULL
+    for(i in 1:length(data)){
+      int.data <- NULL
+      c <- apply(data[[i]][["classic"]][["GOterms"]],2, function(x) length(which(x < 0.05)))
+      c_fdr <- apply(data[[i]][["classic"]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+      
+      e <- apply(data[[i]][["elim"]][["GOterms"]],2, function(x) length(which(x < 0.05)))
+      e_fdr <- apply(data[[i]][["elim"]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+      
+      w <- apply(data[[i]][["weight"]][["GOterms"]],2, function(x) length(which(x < 0.05)))
+      w_fdr <- apply(data[[i]][["weight"]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+      
+      l <- apply(data[[i]][["lea"]][["GOterms"]],2, function(x) length(which(x < 0.05)))
+      l_fdr <- apply(data[[i]][["lea"]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+      
+      m <- apply(data_mwu[[i]][["GOterms"]],2, function(x) length(which(x < 0.05)))
+      m_fdr <- apply(data_mwu[[i]][["GOterms"]],2, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+      
+      int.data <- cbind(N= c(c, c_fdr, e, e_fdr, w, w_fdr, l, l_fdr, m, m_fdr),
+                        method = rep(c("classic", "elim", "weight", "lea", "mwu"), each=200),
+                        fdr = rep(c("no fdr", "fdr"), each=100, times=5))
+      
+      fin.data <- rbind(fin.data, int.data)
+    }
+    
+    fin.data <- as.data.frame(cbind(fin.data, slope=rep(seq(0.0,0.35,0.05), each=1000)))
+    fin.data$N <- as.numeric(fin.data$N)
+  }
+  return(fin.data)
+  
+}
+
+
+
+get.fc.over.go <- function(data, data_mwu){
+  fin.data <- NULL
+  for(i in 1:length(data)){
+    int.data <- NULL
+    c <- cbind(trans=rep(row.names(data[[i]]$classic$trans), times=100),
+               log2FC=unlist(data[[i]]$classic$trans), N = unlist(data[[i]]$classic$trans_n),
+               fdr=rep("no fdr", times=length(rep(row.names(data[[i]]$classic$trans), times=100))),
+               method=rep("classic", times=length(rep(row.names(data[[i]]$classic$trans), times=100))))
+    
+    
+    c_fdr <- cbind(trans=rep(row.names(data[[i]]$classic$trans), times=100),
+               log2FC=unlist(data[[i]]$classic$trans),
+               N = unlist(data[[i]]$classic$trans_n_fdr),
+               fdr=rep("fdr", times=length(rep(row.names(data[[i]]$classic$trans), times=100))),
+               method=rep("classic", times=length(rep(row.names(data[[i]]$classic$trans), times=100))))
+    
+    
+    e <- cbind(trans=rep(row.names(data[[i]]$elim$trans), times=100),
+               log2FC=unlist(data[[i]]$elim$trans), 
+               N = unlist(data[[i]]$elim$trans_n),
+               fdr=rep("no fdr", times=length(rep(row.names(data[[i]]$elim$trans), times=100))),
+               method=rep("elim", times=length(rep(row.names(data[[i]]$elim$trans), times=100))))
+    
+    e_fdr <- cbind(trans=rep(row.names(data[[i]]$elim$trans), times=100),
+               log2FC=unlist(data[[i]]$elim$trans),
+               N = unlist(data[[i]]$elim$trans_n_fdr),
+               fdr=rep("fdr", times=length(rep(row.names(data[[i]]$elim$trans), times=100))),
+               method=rep("elim", times=length(rep(row.names(data[[i]]$elim$trans), times=100))))
+    
+    
+    w <- cbind(trans=rep(row.names(data[[i]]$weigth$trans), times=100),
+               log2FC=unlist(data[[i]]$weigth$trans), 
+               N = unlist(data[[i]]$weigth$trans_n),
+               fdr=rep("no fdr", times=length(rep(row.names(data[[i]]$weigth$trans), times=100))),
+               method=rep("weigth", times=length(rep(row.names(data[[i]]$weigth$trans), times=100))))
+    
+    w_fdr <- cbind(trans=rep(row.names(data[[i]]$weigth$trans), times=100),
+               log2FC=unlist(data[[i]]$weigth$trans),
+               N = unlist(data[[i]]$weigth$trans_n_fdr),
+               fdr=rep("fdr", times=length(rep(row.names(data[[i]]$weigth$trans), times=100))),
+               method=rep("weight", times=length(rep(row.names(data[[i]]$weigth$trans), times=100))))
+    
+    
+    l <- cbind(trans=rep(row.names(data[[i]]$lea$trans), times=100),
+               log2FC=unlist(data[[i]]$lea$trans), 
+               N = unlist(data[[i]]$lea$trans_n),
+               fdr=rep("no fdr", times=length(rep(row.names(data[[i]]$lea$trans), times=100))),
+               method=rep("lea", times=length(rep(row.names(data[[i]]$lea$trans), times=100))))
+    
+    l_fdr <- cbind(trans=rep(row.names(data[[i]]$lea$trans), times=100),
+               log2FC=unlist(data[[i]]$lea$trans),
+               N = unlist(data[[i]]$lea$trans_n_fdr),
+               fdr=rep("fdr", times=length(rep(row.names(data[[i]]$lea$trans), times=100))),
+               method=rep("lea", times=length(rep(row.names(data[[i]]$lea$trans), times=100))))
+    
+    
+    
+    
+    m <- cbind(trans=rep(row.names(data_mwu[[i]]$trans), times=100),
+               log2FC=unlist(data_mwu[[i]]$trans), N = unlist(data_mwu[[i]]$trans_n),
+               fdr=rep("no fdr", times=length(rep(row.names(data_mwu[[i]]$trans), times=100))),
+               method=rep("mwu", times=length(rep(row.names(data_mwu[[i]]$trans), times=100))))
+    
+    m_fdr <- cbind(trans=rep(row.names(data_mwu[[i]]$trans), times=100),
+               log2FC=unlist(data_mwu[[i]]$trans),
+               N = unlist(data_mwu[[i]]$trans_n_fdr),
+               fdr=rep("fdr", times=length(rep(row.names(data_mwu[[i]]$trans), times=100))),
+               method=rep("mwu", times=length(rep(row.names(data_mwu[[i]]$trans), times=100))))
+    
+    int.data <- cbind(rbind(c, c_fdr, e, e_fdr, w, w_fdr, l, l_fdr, m, m_fdr), slope=data_mwu[[i]]$misc$slope)
+    
+    fin.data <- rbind(fin.data, int.data)
+  }
+  
+  fin.data <- as.data.frame(fin.data)
+  fin.data$N <- as.numeric(fin.data$N)
+  fin.data$log2FC <- as.numeric(fin.data$log2FC)
+  
+  return(fin.data)
+}
+
+
+
+get.median.line <- function(data, data_mwu, max=300){
+ fin.data <- NULL
+  for(i in 1:length(data)){
+    int.data <- NULL
+    c <- cbind(Median=apply(get_lines(data[[i]]$classic$trans, data[[i]]$classic$trans_n, max=max)[,2:101],1, function(x) median(x, na.rm=T)),
+               N=1:300,
+               fdr="no fdr", slope=data[[i]]$misc$slope, method="classic")
+    
+    c_fdr <- cbind(Median=apply(get_lines(data[[i]]$classic$trans, data[[i]]$classic$trans_n, max=max)[,2:101],1, function(x) median(x, na.rm=T)),
+                   N=1:300,
+                   fdr="fdr", slope=data[[i]]$misc$slope, method="classic")
+    
+    
+    
+    e <- cbind(Median=apply(get_lines(data[[i]]$elim$trans, data[[i]]$elim$trans_n, max=max)[,2:101],1, function(x) median(x, na.rm=T)),
+               N=1:300,
+               fdr="no fdr", slope=data[[i]]$misc$slope, method="elim")
+    
+    e_fdr <- cbind(Median=apply(get_lines(data[[i]]$elim$trans, data[[i]]$elim$trans_n_fdr, max=max)[,2:101],1, function(x) median(x, na.rm=T)),
+                   N=1:300,
+                   fdr="fdr", slope=data[[i]]$misc$slope, method="elim")
+    
+    
+    
+    w <- cbind(Median=apply(get_lines(data[[i]]$weight$trans, data[[i]]$weight$trans_n, max=max)[,2:101],1, function(x) median(x, na.rm=T)),
+               N=1:300,
+               fdr="no fdr", slope=data[[i]]$misc$slope, method="weight")
+    
+    w_fdr <- cbind(Median=apply(get_lines(data[[i]]$weight$trans, data[[i]]$weight$trans_n_fdr, max=max)[,2:101],1, function(x) median(x, na.rm=T)),
+                   N=1:300,
+                   fdr="fdr", slope=data[[i]]$misc$slope, method="weight")
+    
+    
+    
+    # l <- cbind(Median=unlist(get_lines(data[[i]]$lea$trans, data[[i]]$lea$trans_n, max=max)[,-1]), N=rep(1:300, times=100), fdr="no fdr", slope=data[[i]]$misc$slope, method="lea")
+    # 
+    # l_fdr <- cbind(Median=unlist(get_lines(data[[i]]$lea$trans, data[[i]]$lea$trans_n_fdr, max=max)[,-1]), N=rep(1:300, times=100), fdr="fdr", slope=data[[i]]$misc$slope, method="lea")
+    # 
+    
+    
+    m <- cbind(Median=apply(get_lines(data_mwu[[i]]$trans, data_mwu[[i]]$trans_n, max=max)[,2:101],1, function(x) median(x, na.rm=T)),
+               N=1:300,
+               fdr="no fdr", slope=data_mwu[[i]]$misc$slope, method="mwu")
+    
+    m_fdr <- cbind(Median=apply(get_lines(data_mwu[[i]]$trans, data_mwu[[i]]$trans_n_fdr, max=max)[,2:101],1, function(x) median(x, na.rm=T)),
+                   N=1:300,
+                   fdr="fdr", slope=data_mwu[[i]]$misc$slope, method="mwu")
+    
+    fin.data <- rbind(fin.data, c, c_fdr, e, e_fdr, w, w_fdr, m, m_fdr)
+  }
+ fin.data <- as.data.frame(fin.data)
+ fin.data$Median <- as.numeric(fin.data$Median)
+ fin.data$N <- as.numeric(fin.data$N)
+ return(fin.data)
+}
+
+
+get.GO.over.trans <- function(data, data_mwu){
+  fin.data <- NULL
+  for(i in 1:length(data)){
+    int.data <- NULL
+    c <- apply(data[[i]][["classic"]][["GOterms"]],1, function(x) length(which(x < 0.05)))
+    c_fdr <- apply(data[[i]][["classic"]][["GOterms"]],1, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+    
+    e <- apply(data[[i]][["elim"]][["GOterms"]],1, function(x) length(which(x < 0.05)))
+    e_fdr <- apply(data[[i]][["elim"]][["GOterms"]],1, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+    
+    w <- apply(data[[i]][["weight"]][["GOterms"]],1, function(x) length(which(x < 0.05)))
+    w_fdr <- apply(data[[i]][["weight"]][["GOterms"]],1, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+    
+    l <- apply(data[[i]][["lea"]][["GOterms"]],1, function(x) length(which(x < 0.05)))
+    l_fdr <- apply(data[[i]][["lea"]][["GOterms"]],1, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+    
+    m <- apply(data_mwu[[i]][["GOterms"]],1, function(x) length(which(x < 0.05)))
+    m_fdr <- apply(data_mwu[[i]][["GOterms"]],1, function(x) length(which(p.adjust(x, method="fdr") < 0.05)))
+    
+    int.data <- cbind(term=c(rep(row.names(data[[i]][["classic"]][["GOterms"]]),times=8), rep(row.names(data_mwu[[i]]$GOterms), times=2)),
+                      N_trans = c(rep(data[[i]]$misc$go$Annotated, 8), rep(data_mwu[[i]]$misc$go$trans_N, times=2)),
+                      N_sig= c(c, c_fdr, e, e_fdr, w, w_fdr, l, l_fdr, m, m_fdr),
+                      method = rep(c("classic", "elim", "weight", "lea", "mwu"), times=c(rep(length(c)*2,4), length(m)*2)),
+                      fdr = c(rep(c("no fdr", "fdr"), each=length(c), times=4), rep(c("no fdr", "fdr"), each=length(m), times=1)))
+    
+    fin.data <- rbind(fin.data, int.data)
+  }
+  
+  fin.data <- as.data.frame(cbind(fin.data, slope=rep(seq(0.0,0.35,0.05), each=dim(int.data)[1])))
+  fin.data$N_sig <- as.numeric(fin.data$N_sig)
+  fin.data$N_trans <- as.numeric(fin.data$N_trans)
+  return(fin.data)
+  
+}
+
+
+get_lines <- function(fcvals, nvals, iterations=100, max=300){
+  int.data <- data.frame(N = seq(1,max,1))
+  for(i in 1:iterations){
+    int.data <- cbind(int.data, sapply(1:max, function(x) median(as.numeric(fcvals[,i][which(nvals[,i] >= x)])), USE.NAMES = F))
+  }
+  return(int.data)
+}
+
+get.line.over.go <- function(data, data_mwu, max=300){
+  fin.data <- NULL
+  for(i in 1:length(data)){
+    int.data <- NULL
+    c <- cbind(Median=unlist(get_lines(data[[i]]$classic$trans, data[[i]]$classic$trans_n, max=max)[,-1]), N=rep(1:300, times=100), fdr="no fdr", slope=data[[i]]$misc$slope, method="classic", group=rep(1:300, each=100))
+    
+    c_fdr <- cbind(Median=unlist(get_lines(data[[i]]$classic$trans, data[[i]]$classic$trans_n, max=max)[,-1]), N=rep(1:300, times=100), fdr="fdr", slope=data[[i]]$misc$slope, method="classic", group=rep(1:300, each=100))
+    
+    
+    
+    e <- cbind(Median=unlist(get_lines(data[[i]]$elim$trans, data[[i]]$elim$trans_n, max=max)[,-1]), N=rep(1:300, times=100), fdr="no fdr", slope=data[[i]]$misc$slope, method="elim", group=rep(1:300, each=100))
+    
+    e_fdr <- cbind(Median=unlist(get_lines(data[[i]]$elim$trans, data[[i]]$elim$trans_n_fdr, max=max)[,-1]), N=rep(1:300, times=100), fdr="fdr", slope=data[[i]]$misc$slope, method="elim", group=rep(1:300, each=100))
+    
+    
+    
+    w <- cbind(Median=unlist(get_lines(data[[i]]$weight$trans, data[[i]]$weight$trans_n, max=max)[,-1]), N=rep(1:300, times=100), fdr="no fdr", slope=data[[i]]$misc$slope, method="weight", group=rep(1:300, each=100))
+    
+    w_fdr <- cbind(Median=unlist(get_lines(data[[i]]$weight$trans, data[[i]]$weight$trans_n_fdr, max=max)[,-1]), N=rep(1:300, times=100), fdr="fdr", slope=data[[i]]$misc$slope, method="weight", group=rep(1:300, each=100))
+    
+    
+    
+    # l <- cbind(Median=unlist(get_lines(data[[i]]$lea$trans, data[[i]]$lea$trans_n, max=max)[,-1]), N=rep(1:300, times=100), fdr="no fdr", slope=data[[i]]$misc$slope, method="lea")
+    # 
+    # l_fdr <- cbind(Median=unlist(get_lines(data[[i]]$lea$trans, data[[i]]$lea$trans_n_fdr, max=max)[,-1]), N=rep(1:300, times=100), fdr="fdr", slope=data[[i]]$misc$slope, method="lea")
+    # 
+    
+    
+    m <- cbind(Median=unlist(get_lines(data_mwu[[i]]$trans, data_mwu[[i]]$trans_n, max=max)[,-1]), N=rep(1:300, times=100), fdr="no fdr", slope=data_mwu[[i]]$misc$slope, method="mwu", group=rep(1:300, each=100))
+    
+    m_fdr <- cbind(Median=unlist(get_lines(data_mwu[[i]]$trans, data_mwu[[i]]$trans_n_fdr, max=max)[,-1]), N=rep(1:300, times=100), fdr="fdr", slope=data_mwu[[i]]$misc$slope, method="mwu", group=rep(1:300, each=100))
+    
+    fin.data <- rbind(fin.data, c, c_fdr, e, e_fdr, w, w_fdr, m, m_fdr)
+  }
+  
+  fin.data <- as.data.frame(fin.data)
+  fin.data$Median <- as.numeric(fin.data$Median)
+  fin.data$N <- as.numeric(fin.data$N)
+  return(fin.data)
+}
+
+```
+
+
+```{r}
+# # function to get number of significant GO terms per run 
+# 
+# orig_GO_N <- get.GO.term.data(orig_results, orig_mwu)
+# 
+# # function to get percentage of times a go term was deemed significant over the number of transcripts
+# 
+# orig_GO_N_o_t <- get.GO.over.trans(orig_results, orig_mwu)
+# 
+# orig_fc_o_trans <- get.fc.over.go(orig_results, orig_mwu)
+# 
+# orig_lines <- get.line.over.go(orig_results, orig_mwu)
+# 
+# orig_median_line <- get.median.line(orig_results, orig_mwu)
+# 
+# 
+# # RAT DATA
+# 
+# rat_GO_N <- get.GO.term.data(rat_results, rat_mwu)
+# 
+# rat_GO_N_o_t <- get.GO.over.trans(rat_results, rat_mwu)
+# 
+# rat_fc_o_trans <- get.fc.over.go(rat_results, rat_mwu)
+# 
+# rat_lines <- get.line.over.go(rat_results, rat_mwu)
+# 
+# rat_median_line <- get.median.line(rat_results, rat_mwu)
+# 
+# # HUMAN DATA
+# 
+# human_GO_N <- get.GO.term.data(human_results, human_mwu)
+# 
+# 
+# human_GO_N_o_t <- get.GO.over.trans(human_results, human_mwu)
+# 
+# human_fc_o_trans <- get.fc.over.go(human_results, human_mwu)
+# 
+# human_lines <- get.line.over.go(human_results, human_mwu)
+# 
+# human_median_line <- get.median.line(human_results, human_mwu)
+
+```
+
+
+# Introduction
+
+In this small document I will start the presentation of the results.The first section concerns itself with the explorative data analysis of the original dataset which consists of differential expression results from a RNA sequencing run between several conditions.
+After that the different results of the different algorithms will be presented before more formal testing is applied to the previously introduced results.
+
+# EDA Original Data
+
+The original data from a Differential expression analysis of a RNA-sequencing dataset includes 8546 transcripts from which 1107 were deleted due to them having no associated GO terms in the annotation file.
+The mean and median of the log2 Fold Change of the chosen differential expression comparison is 0.093 and 0.001 respectively.
+In sum 3133 GO terms are present in the annotation file with them having, on average, 146.9 transcripts or 33 transcripts by taking the median.
+Further Numbers are presented in the table below.
+
+|             |             | N    | mean                          | max min       | median | 25%/75% Quantile |
+|:----------|:----------|:----------|:----------|:----------|:----------|:----------|
+| Transcripts | Fold Change | 7439 | 0.093                         | [5.81; -6.26] | -0.001 | -0.44; 0.48      |
+|             |             |      | mean of \n transcripts per GO |               |        |                  |
+| Go Term     |             | 3133 | 146.9                         | [7592; 10]    | 33     | 16; 87           |
+
+The next dotplot describes the average log2FC in each GO term against the log of the number of annotated in the dataset.
+The log was chosen to give a more spread out view as otherwise the maximum annotation goes beyond 6000 and the lower regions are not as distinguishable.
+The whole point cloud is shifted rightwards or in other words in the positive region.
+Especially the GO terms with higher numbers are above a mean log2FC of zero.
+100 GO terms with over 970 transcripts are exclusively on the positive side of the mean log2FC.
+
+```{r}
+par(mfrow=c(1,2))
+
+plot(results_orig$go$medianFC, log10(results_orig$go$ntrans_real), main="median log2FC in each GO term vs. the number of annotated transcripts", ylab="log(Number) of annotated transcripts in the dataset", xlab="Mean log2FC of the transcripts in one GO term")
+
+plot(results_orig$seq_info$FC.sep, log10(results_orig$seq_info$nmember_real), main="Number of GO terms annotated to one transcript 
+     vs. the respective log2FC", ylab="Number of annotated GO terms per transcripts", xlab="log2 Fold Change")
+
+```
+
+Another depiction of the fold change in combination with the number of GO terms annotated to transcripts is the next plot.
+The mean log2FC is calculated over every transcript which has a certain number of annoated GO terms.
+This goes from 0 to 656 and shows that with the higher number of annotations the mean log2FC of the transcripts increases.
+Above 400 n
+
+```{r}
+# get moving median of fc by membership
+fc_N <- as.data.frame(cbind(0:max(results_orig$seq_info$nmember_real), sapply(0:max(results_orig$seq_info$nmember_real),
+                                                    function(x) median(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_real > x)])))); colnames(fc_N) <- c("N", "medianFC")
+
+par(mfrow=c(1,1))
+
+plot(fc_N$N, fc_N$medianFC, main="Mean log2FC over the number of annotated GO terms", ylab="Mean log2FC", xlab="Number of annotated GO terms", type="l")
+
+```
+
+In Sum the transcripts in the dataset itself have a tendency to have a higher mean log2FC with an increasing number of annotations.
+This also aplies to the GO terms.
+
+## Original Dataset
+
+## Histogram of Annotation structure for all three datasets
+
+```{r}
+par(mfrow=c(2,3))
+hist(sapply(annotations$orig, length), nclass=100, main="Original Data Transcripts Membership")
+hist(sapply(annotations$rat, length), nclass=100, main="Rat Data Transcripts Membership")
+hist(sapply(annotations$human, length), nclass=100, main="Human Data Transcripts Membership")
+
+
+hist(sapply(inverseList(annotations$orig), length), nclass=100, main="Original Data GO Membership")
+hist(sapply(inverseList(annotations$rat), length), nclass=100, main="Rat Data GO Membership")
+hist(sapply(inverseList(annotations$human), length), nclass=100, main="Human Data GO Membership")
+```
+
+### Rat Data
+
+### Human Data
+
+# Original Data runs (see other results until implemented here)
+
+In the following the different methods of the will be examined.
+The different methods are the hierarchical clustered Wilcoxon test and the Kolmogorov-Smirnov test with four different algorithms: Classic, Elim, weight and lea.
+Lea might be featured or maybe replaced by something else.
+
+The Barplot and corresponding table describe the number of significant GO terms in each method with and without FDR correction at an \alpha of 0.05.
+The Elim and weight algoritm (lea probably too) already include a Bonferroni correction during the run.
+The used fdr correction in the plots is the Benjamini--Hochberg (BH) procedure.
+Without any correction on the final pvalues the mwu method detects well over 900 GO terms as significant with the classic method detecting less than half of that.
+The other three methods are in a similar range with the weight method having the least amount detected.
+
+When applying the BH correction method the elim and weight method fall to zero and three significant GO terms and the lea and classic detecting 10 and 30, respectively.
+The MWU method retains 684 of the original 917 GO terms at an \alpha-level of 0.05.
+
+```{r}
+# get numbers of sig GO terms
+sig_GO <- c(classic=length(which(results_orig$ks$classic < 0.05)), elim=length(which(results_orig$ks$elim < 0.05)), 
+            weight=length(which(results_orig$ks$weight01 < 0.05)),
+            mwu=length(which(results_orig$mwu$pval < 0.05)))
+
+
+# get numbers of sig GO terms when fdr
+sig_GO_fdr <- c(classic=length(which(p.adjust(results_orig$ks$classic, method="fdr") < 0.05)), elim=length(which(p.adjust(results_orig$ks$elim, method="fdr") < 0.05)), 
+            weight=length(which(p.adjust(results_orig$ks$weight01, method="fdr") < 0.05)),
+            mwu=length(which(p.adjust(results_orig$mwu$pval, method="fdr") < 0.05)))
+
+
+par(mfrow=c(1,2))
+barplot(sig_GO)
+barplot(sig_GO_fdr)
+
+kable(rbind(sig_GO, sig_GO_fdr))
+```
+
+-   Put in venn diagramm on how many GO terms they agree (only if needed)
+
+Figure XY below shows the number of significant GO terms per transcript over its respective log2FC value.
+The different methods are stacked behind each other from the highest number of significant GO terms to the lowest.
+They are also indicated by the color.
+The vertical line describes the mean log2FC value for every transcript which has over 20 significant GO terms detected.
+This value was taken to indicate the right shift of the log2FC mean with an increasing number of GO terms.
+Because some methods cap out at around 50 GO terms the low value was chosen.
+(describe more) For a more detailed view refer to the plot below this one.
+
+It describes the median (need to change to mean, but they are pretty similar) log2FC of the transcripts which have a certain number of significant GO terms annotated to them.
+All lines indicate an increasing median log2FC with an increasing number of significant GO terms.
+The mwu (black) and classic (blue) method have the highest number of GO terms marked as significant which results in a less steep increase of the curve.
+The weight(grey) and elim(orange) are similar in their increase and also the maximum Number of GO terms.
+The green line, which is the lea method has the steepest incline and also caps out earlier on the numbers of GO terms.
+
+```{r}
+par(mfrow=c(2,1), mai=c(1,1,0.5,1))
+
+# seq_info <- results_normal$original$seq_info
+
+plot(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_mwu, col="black", ylab="Number of times Transcript is a member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms
+     black=MWU; blue=classic; orange=elim; green=weight; lea=grey  Vertical lines: Mean(FC) | N > 20")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_mwu > 20)]), col="black")
+points(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_classic_sig, col="blue")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_classic_sig > 20)]), col="blue")
+points(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_elim_sig, col="orange")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_elim_sig > 20)]), col="orange")
+points(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_lea_sig, col="green")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_weight_sig > 20)]), col="green")
+points(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_weight_sig, col="grey")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_lea_sig > 20)]), col="grey")
+
+plot(results_orig$medi_lines$N, results_orig$medi_lines$median_mwu, col="black", type="l", ylim=c(0, 1.7), main="Median log2FC of the transcripts over the number of significant GO terms
+     black=MWU; blue=classic; orange=elim; green=weight; lea=grey", ylab="Median log2FC", xlab="Number of significant GO terms")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_mwu, labels=results_orig$medi_lines$N_mwu)
+lines(results_orig$medi_lines$N, results_orig$medi_lines$median_classic, col="blue")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_classic, labels=results_orig$medi_lines$N_classic)
+lines(results_orig$medi_lines$N, results_orig$medi_lines$median_elim, col="orange")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_elim, labels=results_orig$medi_lines$N_elim)
+lines(results_orig$medi_lines$N, results_orig$medi_lines$median_weight01, col="green")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_weight01, labels=results_orig$medi_lines$N_weight01)
+lines(results_orig$medi_lines$N, results_orig$medi_lines$median_lea, col="gray")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_lea, labels=results_orig$medi_lines$N_lea)
+
+```
+
+### WITH FDR
+
+```{r}
+par(mfrow=c(2,1), mai=c(1,1,0.5,1))
+
+# seq_info <- results_normal$original$seq_info
+
+plot(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_mwu, col="black", ylab="Number of times Transcript is a member \n of significant GO term",
+     xlab="log2 Fold change", main="Fold change vs number of membership in significant GO terms
+     black=MWU; blue=classic; orange=elim; green=weight; lea=grey  Vertical lines: Mean(FC) | N > 20")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_mwu_fdr > 20)]), col="black")
+points(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_classic_sig_fdr, col="blue")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_classic_sig_fdr > 20)]), col="blue")
+points(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_elim_sig_fdr, col="orange")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_elim_sig_fdr > 20)]), col="orange")
+points(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_lea_sig_fdr, col="green")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_weight_sig_fdr > 20)]), col="green")
+points(results_orig$seq_info$FC.sep, results_orig$seq_info$nmember_weight_sig_fdr, col="grey")
+abline(v=mean(results_orig$seq_info$FC.sep[which(results_orig$seq_info$nmember_lea_sig_fdr > 20)]), col="grey")
+
+plot(results_orig$medi_lines$N, results_orig$medi_lines$median_mwu_fdr, col="black", type="l", ylim=c(0, 3), main="Median log2FC of the transcripts over the number of significant GO terms
+     black=MWU; blue=classic; orange=elim; green=weight; lea=grey", ylab="Median log2FC", xlab="Number of significant GO terms")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_mwu, labels=results_orig$medi_lines$N_mwu)
+lines(results_orig$medi_lines$N, results_orig$medi_lines$median_classic_fdr, col="blue")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_classic, labels=results_orig$medi_lines$N_classic)
+lines(results_orig$medi_lines$N, results_orig$medi_lines$median_elim_fdr, col="orange")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_elim, labels=results_orig$medi_lines$N_elim)
+lines(results_orig$medi_lines$N, results_orig$medi_lines$median_weight01_fdr, col="green")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_weight01, labels=results_orig$medi_lines$N_weight01)
+lines(results_orig$medi_lines$N, results_orig$medi_lines$median_lea_fdr, col="gray")
+# text(results_orig$medi_lines$N, results_orig$medi_lines$median_lea, labels=results_orig$medi_lines$N_lea)
+
+```
+
+# Resampling run with varying slope
+
+## Model for Bias
+
+Here the reasoning for the fourth sampling algorithm is given. The table below shows two linear models which model the log2FC over the number of GO terms per transcript as well as the standard deviation of the log2Fc over the given number. The number of GO terms is on a log10 scale for the whole section. The Model fit is far from optimal and therefore a loess curve is fitted further down in the section. 
+```{r}
+par(mfrow=c(1,2))
+misc$trans$nmemberlog10 <- log10(misc$trans$nmember_real)
+real_lm <- lm(FC.sep~nmemberlog10, data=misc$trans)
+
+
+tab_model(real_lm, dv.labels=c("log2FC"))
+
+plot(real_lm, which=2, main="log2FC QQPlot")
+
+plot(misc$trans$FC.sep~log10(misc$trans$nmember_real), main="log10(Number of GO Terms) over log2FC per Transcript \n red line = linear regression", ylab="log2FC", xlab="log10 of Number of GO terms per transcript")
+abline(real_lm, col="red")
+```
+
+The upper left plot shows the linear model through the log2FC and Number of GO terms per transcript. Below that a zoomed in variant of the upper plot is displayed. This gives a better picture of the slope. Also, the loess fit is plotted as a blue line. The right plot depicts the Variance(log2FC) of each number of transcript with the same number of GO terms. The red dots are taken from the real data where at least five transcripts have the same amount of GO terms. The black dots are sampled variances from a Normal distribution with mean = 0.9 (intercept from variance linear model) and variance = ${0.01*exp(1.5*N_{GO})}$ with $N_{GO}$ being the number of GO terms. This function was eyeballed so it fits the original distribution of variances over the number of GO terms.
+
+```{r}
+
+x <- seq(-2,4,0.1)
+plot(x, y=0*x, type="l")
+for(i in seq(0,0.35, 0.05)){
+  intercept <- 1.23221*i
+  lines(x, y=i*x-intercept)
+}
+abline(v= 0, h=0)
+abline(v=1.23221, col="green")
+abline(real_lm, col="red")
+```
+
+## Rat data
+
+### Sampled data
+
+```{r}
+par(mfrow=c(2,4))
+for(j in 1:8){
+plot(x=1:300, y=sapply(1:300, function(x) median(rat_results[[j]]$classic$trans[,1][which(rat_results[[j]]$misc$trans$GO_N >= x)], na.rm=T)), type="l", ylim=c(-1, 1))
+for(i in 2:100){
+  lines(x=1:300, y=sapply(1:300, function(x) median(rat_results[[j]]$classic$trans[,i][which(rat_results[[j]]$misc$trans$GO_N >= x)], na.rm=T)))
+}
+lines(x=1:300, sapply(1:300, function(x) median(unlist(rat_results[[j]]$classic$trans[which(rat_results[[j]]$misc$trans$GO_N >= x),]), na.rm=T)), col="red")}
+       
+
+```
+
+### Number of significant GO terms
+
+```{r}
+
+```
+
+```{r}
+ggplot(data=rat_GO_N[rat_GO_N$method!="lea",], mapping=aes(x=slope, y=N/100,col=fdr))+
+  geom_boxplot()+
+  facet_wrap(~method)+
+  # geom_jitter(width=0.01)+
+  theme_minimal()
+```
+
+### FDR of GO terms in each method over its Number of transcripts
+
+```{r}
+
+
+ggplot(data = rat_GO_N_o_t[rat_GO_N_o_t$method=="classic",], mapping=aes(x=log10(N_trans), y=N_sig/100, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("classic")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data = rat_GO_N_o_t[rat_GO_N_o_t$method=="elim",], mapping=aes(x=log10(N_trans), y=N_sig/100, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+   ggtitle("elim")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data = rat_GO_N_o_t[rat_GO_N_o_t$method=="weight",], mapping=aes(x=log10(N_trans), y=N_sig/100, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+   ggtitle("weight")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data = rat_GO_N_o_t[rat_GO_N_o_t$method=="mwu",], mapping=aes(x=log10(N_trans), y=N_sig/100, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("MWU")+
+  theme_minimal()
+```
+
+### Fold Change vs number of Membership in significant GO terms
+
+```{r}
+```
+
+```{r}
+ggplot(data=rat_fc_o_trans[rat_fc_o_trans$method=="classic",], mapping=aes(x=log2FC, y=N, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("classic")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data=rat_fc_o_trans[rat_fc_o_trans$method=="elim",], mapping=aes(x=log2FC, y=N, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("elim")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data=rat_fc_o_trans[rat_fc_o_trans$method=="lea",], mapping=aes(x=log2FC, y=N, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("weight (lea???)")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data=rat_fc_o_trans[rat_fc_o_trans$method=="mwu",], mapping=aes(x=log2FC, y=N, col=fdr))+
+  geom_point()+
+  facet_grid(fdr~slope)+
+  ggtitle("mwu")+
+  theme_minimal()
+```
+
+### Median log2FC of all transcripts over GO
+
+```{r}
+
+
+ggplot(data=rat_lines[rat_lines$method=="classic",], mapping=aes(x=N, y=Median, col=fdr, group=group))+
+  geom_line()+
+  # geom_line(data=rat_median_line[rat_median_line$method=="classic"], mapping=aes(x=N, y=Median), col="red")
+  facet_grid(fdr~slope)+
+  ggtitle("classic")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data=rat_lines[rat_lines$method=="elim",], mapping=aes(x=N, y=Median, col=fdr, group=group))+
+  geom_line()+
+  facet_grid(fdr~slope)+
+  ggtitle("elim")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data=rat_lines[rat_lines$method=="weight",], mapping=aes(x=N, y=Median, col=fdr, group=group))+
+  geom_line()+
+  facet_grid(fdr~slope)+
+  ggtitle("weight")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data=rat_lines[rat_lines$method=="mwu",], mapping=aes(x=N, y=Median, col=fdr, group=group))+
+  geom_line()+
+  facet_grid(fdr~slope)+
+  ggtitle("mwu")+
+  theme_minimal()
+```
+

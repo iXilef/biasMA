@@ -1,0 +1,108 @@
+---
+title: "comp"
+author: "Felix Boehm"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    smooth_scroll: yes
+    fig_width: 15
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{=html}
+<style type="text/css">
+.main-container {
+  max-width: 1800px !important;
+  margin: auto;
+}
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  error = F,
+	message = FALSE,
+	warning = FALSE,
+	include = T,
+	echo = F,
+	fig.width = 15,
+  fig.height = 7,
+	options(mc_doScale_quiet=TRUE),
+  results = 'asis'
+)
+library(knitr)
+library(gtsummary)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(ggplot2)
+library(topGO)
+library(zoo)
+library(binr)
+library(dplyr)
+setwd("C:/Users/iXilef/OneDrive/Master/initial")
+```
+
+```{r}
+load("./data/orig_comp.RData")
+load("./data/rat_comp.RData")
+load("./data/human_comp.RData")
+load("./data/comparison.RData")
+
+```
+
+```{r}
+orig_GO <- orig_GO[-which(orig_GO$method %in% c("weight", "elim") & orig_GO$fdr=="fdr"),]
+ 
+all_go <- rbind(cbind(human_GO, data="human"),
+                cbind(rat_GO, data="rat"),
+                cbind(orig_GO, data="orig"))
+all_go <- all_go[-which(all_go$method == "lea"),]
+
+all_go$m <- as.numeric(factor(all_go$method))*6
+all_go$d <- as.numeric(factor(all_go$data))*2
+all_go$f <- as.numeric(factor(all_go$fdr))
+all_go$group <- all_go$m * all_go$d + all_go$f
+
+
+ggplot(all_go, mapping=aes(x=slope, y=median, col=data, shape=fdr, group=group))+
+  geom_point()+
+  facet_wrap(~method, scales="free")+
+  theme_minimal()+
+  geom_line()
+  
+```
+
+```{r}
+int.data <- as.data.frame(rbind(cbind(N= medi_lines$N+1, median=medi_lines$median_mwu, method="MWU"),
+                  cbind(N= medi_lines$N+1, median=medi_lines$median_mwu_fdr, method="MWU fdr"),
+                  cbind(N= medi_lines$N+1, median=medi_lines$median_classic, method="classic"),
+                  cbind(N= medi_lines$N+1, median=medi_lines$median_classic_fdr, method="classic fdr"),
+                  cbind(N= medi_lines$N+1, median=medi_lines$median_weight01, method="weight"),
+                  cbind(N= medi_lines$N+1, median=medi_lines$median_elim, method="elim")))
+
+all_lines <- rbind(orig_med_lines, rat_med_lines, human_med_lines)
+all_lines$method <- ifelse(all_lines$method=="mwu_fdr", "mwu fdr", all_lines$method)
+all_lines$data <- ifelse(all_lines$data=="humaninal", "human", all_lines$data)
+all_lines$slope <- as.numeric(all_lines$slope)
+all_lines$m <- as.numeric(factor(all_lines$method))
+all_lines$d <- as.numeric(factor(all_lines$data))
+all_lines$group <- all_lines$m * all_lines$d+all_lines$slope
+all_lines <- all_lines[all_lines$method != "classic fdr",]
+
+
+ggplot(all_lines, mapping=aes(x=log10(N), y=log2fc, group=group, col=data))+
+  geom_line()+
+  facet_grid(method~slope)+
+  theme_minimal()
+```
+
+
